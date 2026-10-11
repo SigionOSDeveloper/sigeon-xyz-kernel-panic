@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SigeonOS Kernel Panic Manual</title>
+<style>
+
+:root{
+  --sky-top: #1b5fa8;
+  --sky-mid: #3a86c8;
+  --sky-glow: #bfe3ff;
+  --deep: #0d3a66;
+  --deep-soft: #1c5f9e;
+  --glass-blue: #4fb3f0;
+  --aero-highlight: #eaf7ff;
+  --taskbar: #1c3f66;
+  --ink: #0d2b47;
+  --ink-muted: #4c7292;
+  --panic-red: #d43a2e;
+  --panic-glow: #ff8a7a;
+  --sans: 'Segoe UI', 'Segoe UI Historic', Tahoma, Verdana, -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: 'Consolas', 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
+  --radius: 22px;
+}
+
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+
+body{
+  margin: 0;
+  font-family: var(--sans);
+  background: var(--sky-mid);
+  color: var(--ink);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+a{ color: inherit; }
+
+.wrap{
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+.atmosphere{
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 15%, var(--sky-glow) 0%, var(--sky-mid) 45%, var(--sky-top) 78%, #0c3866 100%);
+  overflow: hidden;
+}
+
+.atmosphere .ray{
+  position: absolute;
+  top: -20%;
+  left: 50%;
+  width: 140%;
+  height: 140%;
+  background: conic-gradient(from 200deg at 50% 0%, rgba(255,255,255,0.16), rgba(255,255,255,0) 12%, rgba(255,255,255,0) 88%, rgba(255,255,255,0.16));
+  transform: translateX(-50%);
+  opacity: 0.7;
+}
+
+.atmosphere .bokeh{
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(2px);
+  opacity: 0.35;
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0.1) 55%, rgba(255,255,255,0) 72%);
+}
+
+.atmosphere .b1{ width: 260px; height: 260px; top: 4%; left: 10%; }
+.atmosphere .b2{ width: 140px; height: 140px; top: 18%; left: 74%; opacity:0.25;}
+.atmosphere .b3{ width: 380px; height: 380px; top: 58%; left: -90px; opacity:0.2;}
+.atmosphere .b4{ width: 180px; height: 180px; top: 70%; left: 86%; opacity:0.28;}
+
+.atmosphere .haze{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0) 35%, rgba(4,26,49,0.25) 100%);
+}
+
+nav{
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  width: 100%;
+  padding: 10px 16px;
+}
+
+.dock{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 54px;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 8px 0 6px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(26,58,92,0.92) 0%, rgba(13,34,58,0.9) 100%);
+  border: 1px solid rgba(130,190,240,0.35);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.15) inset,
+    0 10px 26px rgba(3,15,28,0.45),
+    0 0 0 1px rgba(0,0,0,0.2);
+  backdrop-filter: blur(14px) saturate(160%);
+}
+
+.brand{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  color: #eaf5ff;
+  letter-spacing: 0;
+  padding: 6px 14px 6px 6px;
+  border-radius: 6px;
+}
+
+.brand .orb{
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  display: inline-block;
+  background:
+    radial-gradient(circle at 32% 24%, #ffffff 0%, #bfe6ff 14%, var(--glass-blue) 46%, #1c6fb0 78%, #0d3a66 100%);
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.5),
+    0 0 0 1px rgba(255,255,255,0.35) inset,
+    0 -6px 10px rgba(0,0,0,0.15) inset;
+}
+
+.navlinks{
+  display: flex;
+  gap: 2px;
+  list-style: none;
+  margin: 0; padding: 0;
+}
+
+.navlinks a{
+  text-decoration: none;
+  font-size: 13px;
+  color: #cfe6fb;
+  padding: 9px 13px;
+  border-radius: 4px;
+  transition: background .15s ease, color .15s ease;
+}
+.navlinks a:hover{
+  color: #ffffff;
+  background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04));
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.2) inset;
+}
+
+.nav-cta{
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(180deg, #7fd0ff 0%, #2f96e0 45%, #1668ad 100%);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.65) inset,
+    0 1px 1px rgba(255,255,255,0.4) inset,
+    0 4px 10px rgba(10,40,70,0.5);
+  border: 1px solid rgba(6,40,70,0.6);
+}
+
+header.hero{
+  padding: 64px 0 56px;
+}
+
+.hero-copy{
+  max-width: 640px;
+  margin: 0 auto 46px;
+  text-align: center;
+}
+
+.eyebrow-plain{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #ffe8e6;
+  margin: 0 0 18px;
+  padding: 6px 14px 6px 8px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(212,58,46,0.30), rgba(212,58,46,0.12));
+  border: 1px solid rgba(255,138,122,0.55);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.2) inset, 0 6px 14px rgba(3,15,28,0.25);
+  backdrop-filter: blur(6px);
+}
+
+.eyebrow-plain .pip{
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #ffe0dd, var(--panic-red) 60%, #8a1c14);
+  box-shadow: 0 0 0 3px rgba(212,58,46,0.3);
+}
+
+.hero h1{
+  font-size: clamp(34px, 5.2vw, 54px);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  margin: 0 0 20px;
+  font-weight: 600;
+  color: #ffffff;
+  text-shadow: 0 2px 6px rgba(2,12,24,0.45);
+}
+
+.hero p.lead{
+  font-size: 17px;
+  color: rgba(234,245,255,0.85);
+  margin: 0 auto 30px;
+  max-width: 520px;
+}
+
+.hero-actions{
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 26px;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  position: relative;
+}
+
+.btn-primary{
+  color: #ffffff;
+  background: linear-gradient(180deg, #ff9a8f 0%, #d43a2e 45%, #8a1c14 100%);
+  border-color: rgba(100,20,15,0.6);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.75) inset,
+    0 2px 3px rgba(255,255,255,0.4) inset,
+    0 8px 18px rgba(3,15,28,0.4);
+}
+
+.btn-primary:hover{ filter: brightness(1.06); }
+
+.btn-secondary{
+  color: #eaf5ff;
+  background: linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.06));
+  border-color: rgba(255,255,255,0.4);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.3) inset,
+    0 6px 16px rgba(3,15,28,0.25);
+  backdrop-filter: blur(6px);
+}
+
+.viewer{
+  max-width: 880px;
+  margin: 0 auto;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(15,55,95,0.5);
+  background: linear-gradient(180deg, rgba(210,235,255,0.55), rgba(210,235,255,0.25));
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.6) inset,
+    0 30px 70px rgba(2,12,24,0.45),
+    0 6px 18px rgba(2,12,24,0.3);
+  backdrop-filter: blur(14px) saturate(180%);
+}
+
+.viewer-chrome{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 10px 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(200,230,255,0.35) 45%, rgba(150,200,240,0.25) 100%);
+  border-bottom: 1px solid rgba(15,55,95,0.25);
+}
+
+.viewer-chrome .traffic{ display: flex; gap: 6px; }
+
+.viewer-chrome .traffic span{
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.5) inset, 0 1px 1px rgba(0,0,0,0.15);
+}
+.viewer-chrome .traffic span:nth-child(1){ background: linear-gradient(180deg, #ffd27a, #e8a12c); }
+.viewer-chrome .traffic span:nth-child(2){ background: linear-gradient(180deg, #ffe08a, #d9b02a); }
+.viewer-chrome .traffic span:nth-child(3){ background: linear-gradient(180deg, #9adf88, #4fae4a); }
+
+.viewer-chrome .title{
+  flex: 1;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--deep);
+  font-weight: 600;
+}
+
+.viewer-body{
+  position: relative;
+  overflow: hidden;
+  background: #1a0b0b;
+  padding: 26px 30px 30px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.75;
+  color: #ffd7d2;
+  min-height: 340px;
+}
+
+.viewer-body .term-head{
+  color: #c96b60;
+  font-size: 11.5px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(212,58,46,0.25);
+}
+
+.viewer-body .term-line{ white-space: pre-wrap; }
+.viewer-body .prompt{ color: #ff8a7a; font-weight: 700; }
+.viewer-body .cmd{ color: #ffffff; }
+.viewer-body .out{ color: #c98f87; }
+.viewer-body .ok{ color: #7ee787; }
+.viewer-body .err{ color: #ff4d3d; font-weight: 700; }
+.viewer-body .warn{ color: #f6c64b; }
+.viewer-body .cursor{
+  display: inline-block;
+  width: 8px; height: 15px;
+  background: #ff4d3d;
+  vertical-align: -3px;
+  margin-left: 2px;
+  animation: blink 1.05s steps(1) infinite;
+}
+@keyframes blink{ 50%{ opacity: 0; } }
+
+.content-panel{
+  background: #f3f7fb;
+  border-top: 1px solid rgba(15,55,95,0.15);
+  box-shadow: 0 -20px 40px rgba(2,12,24,0.25);
+  position: relative;
+  z-index: 1;
+}
+
+section{ padding: 60px 0; }
+section + section{ border-top: 1px solid rgba(15,55,95,0.09); }
+
+.section-head{
+  margin-bottom: 34px;
+  max-width: 620px;
+}
+
+.section-head h2{
+  font-size: 27px;
+  letter-spacing: -0.01em;
+  margin: 0 0 10px;
+  font-weight: 700;
+  color: var(--deep);
+}
+
+.section-head p{
+  color: var(--ink-muted);
+  font-size: 15px;
+  margin: 0;
+}
+
+.section-tag{
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--deep-soft);
+  background: rgba(79,179,240,0.14);
+  border: 1px solid rgba(79,179,240,0.3);
+  padding: 3px 9px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+.section-tag.panic{
+  color: #8a1c14;
+  background: rgba(212,58,46,0.12);
+  border-color: rgba(212,58,46,0.3);
+}
+
+.prose{
+  max-width: 760px;
+  font-size: 15px;
+  color: #2b4a66;
+}
+.prose p{ margin: 0 0 15px; }
+.prose h3{
+  font-size: 17px;
+  color: var(--deep);
+  margin: 26px 0 8px;
+  font-weight: 700;
+}
+.prose h3:first-child{ margin-top: 0; }
+.prose ul{ margin: 0 0 15px; padding-left: 20px; }
+.prose li{ margin-bottom: 6px; }
+.prose strong{ color: var(--deep); }
+
+.feature-grid{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.feature{
+  background: linear-gradient(180deg, #ffffff, #eef5fb);
+  border: 1px solid rgba(15,55,95,0.14);
+  border-radius: 6px;
+  padding: 22px;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.9) inset,
+    0 6px 16px rgba(15,55,95,0.08);
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+
+a.feature{ text-decoration: none; display: block; }
+
+a.feature:hover{
+  transform: translateY(-2px);
+  border-color: rgba(79,179,240,0.5);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.9) inset,
+    0 10px 24px rgba(15,55,95,0.14);
+}
+
+.feature h3{
+  font-size: 15.5px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--deep);
+}
+
+.feature p{
+  font-size: 14px;
+  color: var(--ink-muted);
+  margin: 0;
+}
+
+.feature .glyph{
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(180deg, #ff9a8f, #d43a2e);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 4px 10px rgba(15,55,95,0.3);
+}
+
+.download-panel{
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(15,55,95,0.16);
+  background: #ffffff;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 10px 24px rgba(15,55,95,0.08);
+}
+
+.download-panel-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(15,55,95,0.12);
+  background: linear-gradient(180deg, #eaf3fb, #dcebf7);
+}
+
+.download-panel-head strong{ color: var(--deep); }
+
+.download-panel-head .version{
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+table.downloads{
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+table.downloads th{
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink-muted);
+  font-size: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid rgba(10,61,107,0.1);
+}
+
+table.downloads td{
+  padding: 14px 24px;
+  border-bottom: 1px solid rgba(10,61,107,0.08);
+  vertical-align: middle;
+  color: var(--ink);
+}
+
+table.downloads tr:last-child td{ border-bottom: none; }
+
+table.downloads .arch{ font-weight: 600; }
+
+table.downloads .filesize{ color: var(--ink-muted); font-size: 13px; }
+
+table.downloads .checksum{
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.dl-link{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 7px 16px;
+  border-radius: 4px;
+  color: #ffffff;
+  background: linear-gradient(180deg, #7fd0ff, #1668ad);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 4px 10px rgba(15,55,95,0.35);
+  border: 1px solid rgba(6,40,70,0.4);
+  white-space: nowrap;
+}
+
+.dl-link:hover{ filter: brightness(1.05); }
+
+.download-note{
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin-top: 16px;
+}
+
+.download-note code{
+  font-family: var(--mono);
+  background: rgba(255,255,255,0.6);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  border: 1px solid rgba(10,61,107,0.1);
+}
+
+.kbd{
+  display: inline-block;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--deep);
+  background: linear-gradient(180deg, #ffffff, #e2edf6);
+  border: 1px solid rgba(15,55,95,0.28);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 2px 7px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.85) inset;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.kbd-row{ display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+
+.code{
+  background: #1a0b0b;
+  border-radius: 6px;
+  border: 1px solid rgba(212,58,46,0.45);
+  padding: 16px 20px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #ffd7d2;
+  overflow-x: auto;
+  margin: 0 0 18px;
+}
+.code .prompt{ color: #ff8a7a; font-weight: 700; }
+.code .cmd{ color: #ffffff; }
+.code .out{ color: #c98f87; }
+.code .ok{ color: #7ee787; }
+.code .err{ color: #ff4d3d; }
+.code .warn{ color: #f6c64b; }
+.code .cmt{ color: #c96b60; font-style: italic; }
+
+.callout{
+  border-left: 3px solid var(--glass-blue);
+  background: rgba(79,179,240,0.09);
+  border-radius: 0 6px 6px 0;
+  padding: 14px 18px;
+  font-size: 14px;
+  color: #2b4a66;
+  margin: 0 0 18px;
+}
+.callout strong{ color: var(--deep); }
+
+.callout.panic{
+  border-left-color: var(--panic-red);
+  background: rgba(212,58,46,0.10);
+}
+
+.callout.warn{
+  border-left-color: #f6a23c;
+  background: rgba(246,162,60,0.11);
+}
+
+.callout.danger{
+  border-left-color: #e5544a;
+  background: rgba(229,84,74,0.1);
+}
+
+footer{ padding: 32px 0 40px; background: var(--taskbar); }
+
+footer .foot-panel{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+footer .foot-links{
+  display: flex;
+  gap: 20px;
+  list-style: none;
+  padding: 0; margin: 0;
+}
+
+footer .foot-links a{
+  font-size: 13px;
+  color: rgba(234,245,255,0.75);
+  text-decoration: none;
+  font-weight: 600;
+}
+footer .foot-links a:hover{ color: #ffffff; }
+
+footer .copyright{
+  font-size: 13px;
+  color: rgba(234,245,255,0.65);
+}
+
+@media (max-width: 900px){
+  .feature-grid{ grid-template-columns: repeat(2, 1fr); }
+  .about-grid{ grid-template-columns: 1fr; gap: 32px; }
+}
+
+@media (max-width: 780px){
+  .wrap{ padding: 0 20px; }
+  .feature-grid{ grid-template-columns: 1fr; }
+  .navlinks{ display: none; }
+  table.downloads .checksum{ display: none; }
+  .hero{ padding: 52px 0 36px; }
+  footer .foot-panel{ flex-direction: column; align-items: flex-start; }
+  .viewer-body{ font-size: 11.5px; padding: 20px; }
+}
+
+</style>
+</head>
+<body>
+
+<div class="atmosphere">
+  <div class="ray"></div>
+  <div class="bokeh b1"></div>
+  <div class="bokeh b2"></div>
+  <div class="bokeh b3"></div>
+  <div class="bokeh b4"></div>
+  <div class="haze"></div>
+</div>
+
+<nav>
+  <div class="dock">
+    <a class="brand" href="#top"><span class="orb"></span>Kernel Panic Manual</a>
+    <ul class="navlinks">
+      <li><a href="#what">What is a panic</a></li>
+      <li><a href="#screen">Reading the screen</a></li>
+      <li><a href="#steps">First steps</a></li>
+      <li><a href="#codes">Error codes</a></li>
+      <li><a href="#report">Report a panic</a></li>
+      <li><a href="#help">Get help</a></li>
+      <li><a href="#recover">Recover</a></li>
+    </ul>
+    <a class="nav-cta" href="#help">I need help</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+
+    <div class="hero-copy">
+      <div class="eyebrow-plain"><span class="pip"></span> kernel-panic.sigeon.xyz</div>
+      <h1>Kernel panic guide.</h1>
+      <p class="lead">If SigeonOS has stopped and shown you a red screen, this page will help you read it, recover from it, and report it so it can be fixed.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#steps">First steps</a>
+        <a class="btn btn-secondary" href="#codes">Look up an error code</a>
+      </div>
+    </div>
+
+    <div class="viewer" id="overview">
+      <div class="viewer-chrome">
+        <div class="traffic"><span></span><span></span><span></span></div>
+        <div class="title">SigeonOS — kernel panic</div>
+      </div>
+      <div class="viewer-body">
+        <div class="term-head">SigeonOS 09-Beta “Sigeon Feather” · Kernel Panic</div>
+        <div class="term-line err">SigeonOS encountered a fatal system error.</div>
+        <div class="term-line out">  Error code: EXC_PAGE_FAULT</div>
+        <div class="term-line out">  Log: Unhandled ring-0 page fault at 0x0000000000000010</div>
+        <div class="term-line">&nbsp;</div>
+        <div class="term-line warn">  Scan the QR code or visit kernel-panic.sigeon.xyz</div>
+        <div class="term-line warn">  with the error code above to get help.</div>
+        <div class="term-line">&nbsp;</div>
+        <div class="term-line ok">  Press ENTER to restart SigeonOS</div>
+        <div class="term-line"><span class="prompt">panic&gt;</span> <span class="cursor"></span></div>
+      </div>
+    </div>
+
+  </div>
+</header>
+
+<div class="content-panel">
+
+<!-- ===================== WHAT IS A PANIC ===================== -->
+<section id="what">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-tag panic">Chapter 1</div>
+      <h2>What is a kernel panic?</h2>
+      <p>Why SigeonOS stops and what the red screen means.</p>
+    </div>
+
+    <div class="prose" style="max-width:800px;">
+      <p>A <strong>kernel panic</strong> is SigeonOS's last line of defence. When the kernel hits a problem it cannot safely recover from — such as an unhandled page fault, a division by zero, or an invalid opcode — it stops everything, records what happened, and shows you a panic screen instead of continuing to run in a broken state.</p>
+      <p>The panic screen is not a crash you can click past. It is the kernel telling you: <em>something went wrong that I could not handle, and I am halting to protect your data and your machine.</em></p>
+
+      <h3>What causes a panic?</h3>
+      <p>Most panics come from one of four places:</p>
+      <ul>
+        <li><strong>A driver bug.</strong> A device driver accesses memory it does not own, or uses a register before it is ready.</li>
+        <li><strong>A hardware problem.</strong> Faulty RAM or a failing device can cause the kernel to see invalid data.</li>
+        <li><strong>A programming error in the kernel.</strong> A bug in SigeonOS itself, especially around memory management or interrupt handling.</li>
+        <li><strong>A broken PEX program.</strong> A native PEX executable that tries to escape its sandbox will be stopped, but a driver-level bug in a program can still bring the kernel down.</li>
+      </ul>
+
+      <div class="callout panic">
+        <strong>Panics are always worth reporting.</strong> Even if you can restart and keep working, the same fault can corrupt saved files or reappear at a worse moment. Reporting it helps the SigeonOS team find and fix the root cause.
+      </div>
+
+      <h3>What a panic is not</h3>
+      <p>A panic is different from a normal application crash. If a built-in app or a PEX program fails, you will usually see an alert or a closed window, not a panic. The panic screen only appears when the kernel itself has stopped.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== READING THE SCREEN ===================== -->
+<section id="screen">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-tag panic">Chapter 2</div>
+      <h2>Reading the panic screen</h2>
+      <p>Every part of the screen has a purpose. Here is what to look for.</p>
+    </div>
+
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="glyph">1</div>
+        <h3>Error code</h3>
+        <p>A short, specific label such as <code>EXC_PAGE_FAULT</code> or <code>EXC_GENERAL_PROTECTION</code>. This is the single most important thing to note down.</p>
+      </div>
+      <div class="feature">
+        <div class="glyph">2</div>
+        <h3>Log line</h3>
+        <p>A one-line description of what the kernel was doing when it stopped. It often includes a memory address or the name of the subsystem involved.</p>
+      </div>
+      <div class="feature">
+        <div class="glyph">3</div>
+        <h3>QR code</h3>
+        <p>A link to <strong>kernel-panic.sigeon.xyz</strong> with the error code pre-filled. Scan it with your phone to open this site and look up the code.</p>
+      </div>
+      <div class="feature">
+        <div class="glyph">4</div>
+        <h3>Restart prompt</h3>
+        <p>The message <em>Press ENTER to restart SigeonOS</em>. Pressing Enter attempts a clean reboot.</p>
+      </div>
+      <div class="feature">
+        <div class="glyph">5</div>
+        <h3>Serial output</h3>
+        <p>If you have a serial console attached, the same information is written there, and can be captured to a file for a bug report.</p>
+      </div>
+      <div class="feature">
+        <div class="glyph">6</div>
+        <h3>Frozen state</h3>
+        <p>The machine will not respond to mouse or keyboard except for the restart prompt. This is intentional.</p>
+      </div>
+    </div>
+
+    <div class="prose" style="margin-top:30px; max-width:800px;">
+      <h3>If you can only photograph the screen</h3>
+      <p>That is fine. The QR code is designed to be scanned from the screen, and the error code is printed large enough to read from a photograph. If you are reporting the panic, a photo plus the error code is the most useful thing you can provide.</p>
+
+      <h3>If you have a serial console</h3>
+      <p>When SigeonOS is booted with a serial console attached, the full panic log is written to the serial port as well as the screen. Capturing that log gives the developers much more detail than a photo alone.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FIRST STEPS ===================== -->
+<section id="steps">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-tag panic">Chapter 3</div>
+      <h2>First steps after a panic</h2>
+      <p>What to do in the first minute.</p>
+    </div>
+
+    <div class="prose" style="max-width:800px;">
+      <h3>1. Write down the error code</h3>
+      <p>Before you restart, note the <strong>error code</strong> exactly as it appears. If you can, also write down the log line and any numbers in it. This is the most valuable information you can give to anyone helping you.</p>
+
+      <h3>2. Take a photo</h3>
+      <p>If you have a phone, photograph the whole screen. It captures the error code, the log line, and the QR code in one shot, and removes the risk of misreading a character.</p>
+
+      <h3>3. Press Enter to restart</h3>
+      <p>Press <span class="kbd">Enter</span> on the panic screen. SigeonOS will attempt to restart. Most one-off panics do not come back after a clean reboot.</p>
+
+      <h3>4. See if it happens again</h3>
+      <p>If the machine boots normally and the panic does not return, you can continue working, but you should still <a href="#report" style="color:var(--deep-soft); font-weight:600;">report the panic</a> so the underlying cause can be tracked down.</p>
+
+      <h3>5. If it panics again</h3>
+      <p>If the same panic happens every boot, stop and read <a href="#recover" style="color:var(--deep-soft); font-weight:600;">Recovering from a repeating panic</a> before doing anything else. Repeated panics usually mean a hardware problem or a boot-time driver bug that needs attention.</p>
+
+      <div class="callout warn">
+        <strong>Do not keep power-cycling a repeating panic.</strong> If the machine panics during boot every time, repeated hard power-offs increase the risk of filesystem damage. Read the recovery section first.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== ERROR CODES ===================== -->
+<section id="codes">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-tag panic">Chapter 4</div>
+      <h2>Error code reference</h2>
+      <p>What each panic code means and what usually causes it.</p>
+    </div>
+
+    <div class="download-panel" style="margin-bottom:24px;">
+      <div class="download-panel-head">
+        <strong>Exception codes</strong>
+        <span class="version">SigeonOS 09-Beta</span>
+      </div>
+      <table class="downloads">
+        <thead>
+          <tr>
+            <th style="width:240px;">Code</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="arch">EXC_DIVIDE</td><td>A division by zero or a divide overflow occurred in kernel code. Usually a bug in a driver or the kernel's own arithmetic.</td></tr>
+          <tr><td class="arch">EXC_INVALID_OPCODE</td><td>The CPU tried to execute an instruction it does not recognise. Often a corrupted code path or a jump into the wrong memory.</td></tr>
+          <tr><td class="arch">EXC_DOUBLE_FAULT</td><td>A second fault happened while the kernel was already handling the first one. This is always serious and usually indicates a broken interrupt handler or stack.</td></tr>
+          <tr><td class="arch">EXC_INVALID_TSS</td><td>The task-state segment is invalid. This is normally a bug in the kernel's descriptor-table setup.</td></tr>
+          <tr><td class="arch">EXC_SEGMENT_NP</td><td>A segment that is not present was referenced. Usually a descriptor-table problem or a bad far call.</td></tr>
+          <tr><td class="arch">EXC_STACK</td><td>A stack overflow or an invalid stack access. Often caused by runaway recursion or a corrupted stack pointer.</td></tr>
+          <tr><td class="arch">EXC_GENERAL_PROTECTION</td><td>The kernel accessed a segment or descriptor in a way the CPU does not allow. Common causes are a null pointer dereference or a mis-set segment register.</td></tr>
+          <tr><td class="arch">EXC_PAGE_FAULT</td><td>A memory access to an unmapped or protected page. This is the most common panic and usually means the kernel tried to read or write an address it does not own.</td></tr>
+          <tr><td class="arch">EXC_ALIGNMENT</td><td>An unaligned memory access where the architecture requires alignment. Often a driver bug with a packed structure.</td></tr>
+          <tr><td class="arch">MANUAL_CRASH</td><td>The developer crash chord was pressed on purpose. This is not a real fault — it is a test.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="prose" style="max-width:800px;">
+      <h3>What the memory address means</h3>
+      <p>Many panics include a memory address, like <code>0x0000000000000010</code>. A very small address (below <code>0x1000</code>) almost always means a <strong>null pointer dereference</strong> — the kernel read from or wrote to an offset from a null pointer. A large address is more likely a real memory-management bug.</p>
+
+      <h3>If your code is not listed</h3>
+      <p>New codes are added as the kernel grows. If you see a code that is not in this table, the code itself is still the most useful thing to report. The SigeonOS team can look it up from the kernel source, and the table will be updated.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== REPORT A PANIC ===================== -->
+<section id="report">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-tag panic">Chapter 5</div>
+      <h2>How to report a panic</h2>
+      <p>What to include and where to send it.</p>
+    </div>
+
+    <div class="prose" style="max-width:800px;">
+      <h3>What to include</h3>
+      <p>A good panic report is short but complete. Include:</p>
+      <ul>
+        <li><strong>The error code</strong> exactly as it appeared, e.g. <code>EXC_PAGE_FAULT</code>.</li>
+        <li><strong>The log line</strong> if you can read it, including any numbers.</li>
+        <li><strong>A photo</strong> of the panic screen if possible.</li>
+        <li><strong>What you were doing</strong> just before the panic — which app, which file, which command.</li>
+        <li><strong>Whether it repeats</strong> on every boot, or happened only once.</li>
+        <li><strong>Your hardware</strong>, if you know it — especially the CPU, amount of RAM, and any add-in cards.</li>
+        <li><strong>Whether a serial console was attached</strong>, and if so, the captured log.</li>
+      </ul>
+
+      <h3>Where to report</h3>
+      <p>The SigeonOS community reports panics in the <strong>#bug-reports</strong> channel on Discord. It is the fastest way to get a human to look at your report.</p>
+
+      <div class="callout">
+        <strong>Discord:</strong> join at <strong>discord.gg/C6QfW357fw</strong> and post in <strong>#bug-reports</strong>. Include the error code in the first line of your message so it is easy to search later.
+      </div>
+
+      <h3>What happens next</h3>
+      <p>A developer or community member will usually reply to confirm the code, ask for any missing detail, and either suggest a workaround or file the panic as a known issue. If the panic has a known fix, they will point you at it.</p>
+
+      <div class="callout warn">
+        <strong>Privacy:</strong> panic reports are public. Do not include personal files, passwords, or anything else you would not want posted in a public channel. The error code and log line are almost always enough.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== GET HELP ===================== -->
+<section id="help">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-tag panic">Chapter 6</div>
+      <h2>Where to get help</h2>
+      <p>Support channels for SigeonOS kernel panics.</p>
+    </div>
+
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="glyph">💬</div>
+        <h3>Discord</h3>
+        <p>The main support channel. Post in <strong>#bug-reports</strong> for panics, or ask in the general channels for help reading a code. Join at <strong>discord.gg/C6QfW357fw</strong>.</p>
+      </div>
+      <div class="feature">
+        <div class="glyph">🌐</div>
+        <h3>This site</h3>
+        <p><strong>kernel-panic.sigeon.xyz</strong> is the reference for panic codes and recovery steps. The QR code on your panic screen links directly here.</p>
+      </div>
+      <div class="feature">
+        <div class="glyph">📖</div>
+        <h3>Main manual</h3>
+        <p>The full SigeonOS manual covers the desktop, apps, terminal, and networking. Start there if you are new to the system.</p>
+      </div>
+      <div class="feature">
+        <div class="glyph">🐦</div>
+        <h3>GitHub</h3>
+        <p>The SigeonOS source lives at <strong>github.com/sigionosdeveloper</strong>. If the project has an issue tracker open, panics can also be filed there.</p>
+      </div>
+      <div class="feature">
+        <div class="glyph">📸</div>
+        <h3>Panic QR code</h3>
+        <p>Scanning the QR code on a panic screen opens this site with the error code pre-filled, so you can jump straight to the right section.</p>
+      </div>
+      <div class="feature">
+        <div class="glyph">🧰</div>
+        <h3>Serial log</h3>
+        <p>If you can attach a serial console, capture the full panic log. Developers can usually diagnose a panic from the log alone, without needing the machine in front of them.</p>
+      </div>
+    </div>
+
+    <div class="prose" style="margin-top:30px; max-width:800px;">
+      <h3>Before you ask</h3>
+      <p>Have the error code ready, and if possible a photo of the screen. It is much easier to help when the code is known, because the recovery path and likely cause are different for each one.</p>
+
+      <h3>If you cannot reach Discord</h3>
+      <p>If Discord is unavailable to you, the same information can be posted on the GitHub repository if an issue tracker is open, or included in any community forum where SigeonOS is discussed. The error code is the key detail — it is what everyone will ask for first.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== RECOVER ===================== -->
+<section id="recover">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-tag panic">Chapter 7</div>
+      <h2>Recovering from a panic</h2>
+      <p>What to do when the machine will not stay up.</p>
+    </div>
+
+    <div class="prose" style="max-width:800px;">
+      <h3>One-off panic</h3>
+      <p>If the panic happened once and the machine restarts normally, you do not need to do anything special. Note the code, report it, and keep using the machine. One-off panics are usually caused by a rare race or a transient hardware glitch and rarely repeat.</p>
+
+      <h3>Repeating panic on boot</h3>
+      <p>If the machine panics every time you start it, work through these steps in order:</p>
+      <ul>
+        <li><strong>Note the error code.</strong> A repeating panic usually has the same code each time. That code tells you which part of the system is failing.</li>
+        <li><strong>Disconnect add-in hardware.</strong> If you recently added a disk, network card, or other device, remove it and try booting again. A driver for that device may be the cause.</li>
+        <li><strong>Boot from the ISO again.</strong> If you have the SigeonOS ISO on a USB stick, boot from it. If the machine runs from the ISO, the problem is likely on your installed disk.</li>
+        <li><strong>Check your RAM.</strong> Faulty memory is a common cause of repeating panics. If you have spare RAM, swap it in and try again.</li>
+        <li><strong>Try a different machine.</strong> If the same ISO panics on one machine but not another, the problem is specific to that hardware.</li>
+      </ul>
+
+      <div class="callout panic">
+        <strong>If the panic happens during boot and you cannot reach a desktop</strong>, report it with the error code and the exact hardware. Boot-time panics are usually driver or memory-map problems and are very fixable once identified.
+      </div>
+
+      <h3>Recovering your files</h3>
+      <p>SigeonOS writes filesystem snapshots to disk with an atomic two-bank journal. If the machine panicked while you were working, the previous committed snapshot is used on the next successful boot, so files you had already saved should still be there. Work that was open but not saved at the moment of the panic may be lost.</p>
+
+      <h3>If the filesystem is damaged</h3>
+      <p>If the machine boots but Finder shows an empty or unreadable disk, the snapshot journal may have been unable to recover. In that case, boot from the ISO and copy any important files off the disk if you can mount it, then reinstall SigeonOS. The SigeonFS journal is designed to make this rare, but no filesystem can protect against every possible hardware failure.</p>
+
+      <h3>Last resort: reinstall</h3>
+      <p>If the machine will not boot at all and you have tried the steps above, reinstalling SigeonOS from the ISO will give you a clean system. This clears the installed filesystem, so back up anything you can reach first. After reinstalling, if the panic returns, the problem is likely hardware rather than the installation.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== ABOUT THE QR CODE ===================== -->
+<section id="qr">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-tag panic">Appendix</div>
+      <h2>About the panic QR code</h2>
+      <p>How the QR code on your panic screen works.</p>
+    </div>
+
+    <div class="prose" style="max-width:800px;">
+      <p>Every panic screen prints a QR code. The code encodes a URL of the form:</p>
+      <div class="code" style="margin:14px 0 22px;">
+        <span class="out">https://kernel-panic.sigeon.xyz/?code=</span><span class="cmd">EXC_PAGE_FAULT</span>
+      </div>
+      <p>Scanning it with a phone opens this site with the error code already known, so you land directly on the right page. The code is standard version 3, error-correction level M, and can be read by any normal QR scanner.</p>
+
+      <h3>If the QR code will not scan</h3>
+      <p>The code is printed at a fixed size on the panic screen. If your scanner has trouble, move the phone a little further away or adjust the screen brightness. If it still will not scan, you can simply visit <strong>kernel-panic.sigeon.xyz</strong> manually and enter the error code from the screen.</p>
+
+      <h3>Why a QR code?</h3>
+      <p>A panic can happen on a machine with no working network, and typing a long error code by hand is error-prone. A QR code lets you capture the exact code and hand it to a working device without retyping it.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== QUICK REFERENCE ===================== -->
+<section id="quick">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-tag panic">Quick reference</div>
+      <h2>Panic quick reference</h2>
+      <p>The one-screen summary.</p>
+    </div>
+
+    <div class="download-panel">
+      <div class="download-panel-head">
+        <strong>What to do</strong>
+        <span class="version">In order</span>
+      </div>
+      <table class="downloads">
+        <thead>
+          <tr>
+            <th style="width:60px;">Step</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="arch">1</td><td>Write down the <strong>error code</strong> and, if you can, the log line.</td></tr>
+          <tr><td class="arch">2</td><td>Photograph the screen if you have a phone.</td></tr>
+          <tr><td class="arch">3</td><td>Press <span class="kbd">Enter</span> to restart.</td></tr>
+          <tr><td class="arch">4</td><td>If it boots normally, report the panic in Discord <strong>#bug-reports</strong>.</td></tr>
+          <tr><td class="arch">5</td><td>If it repeats, remove recently added hardware and try again.</td></tr>
+          <tr><td class="arch">6</td><td>If it still repeats, boot from the ISO to check whether the problem is on the installed disk.</td></tr>
+          <tr><td class="arch">7</td><td>If nothing works, report the code and hardware in Discord — do not keep power-cycling.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="download-note">The single most useful thing you can do after a panic is write down the error code. Everything else follows from that.</p>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-panel">
+      <span class="copyright">© 2026 SigeonOS — Kernel Panic Manual · kernel-panic.sigeon.xyz</span>
+      <ul class="foot-links">
+        <li><a href="#top">Top</a></li>
+        <li><a href="#codes">Error codes</a></li>
+        <li><a href="#report">Report a panic</a></li>
+        <li><a href="https://github.com/sigionosdeveloper">GitHub</a></li>
+      </ul>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* Smooth-scroll with offset for the sticky nav. */
+document.querySelectorAll('a[href^="#"]').forEach(function (link) {
+    link.addEventListener('click', function (e) {
+        var id = link.getAttribute('href');
+        if (!id || id === '#') return;
+        var target = document.querySelector(id);
+        if (!target) return;
+        e.preventDefault();
+        var top = target.getBoundingClientRect().top + window.pageYOffset - 76;
+        window.scrollTo({ top: top, behavior: 'smooth' });
+        history.replaceState(null, '', id);
+    });
+});
+</script>
+
+</body>
+</html>
